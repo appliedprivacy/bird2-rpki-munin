@@ -1,0 +1,86 @@
+#!/bin/sh
+
+# Copyright 2017 alarig <alarig@grifon.fr>
+# Copyright 2017 petrus
+#
+# BSD-3-Clause licence
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+# this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+# this list of conditions and the following disclaimer in the documentation
+# and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its contributors
+# may be used to endorse or promote products derived from this software without
+# specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
+config() {
+	local proto=$1
+	local type=$2
+	local line=$3
+
+	printf "${proto}_${type}.label ${proto}_${type}\n"
+	printf "${proto}_${type}.draw LINE${line}\n"
+}
+
+draw() {
+	local proto=$1
+	local type=$2
+
+	printf "${proto}_${type}.value "
+#	$birdc show protocols all $proto | awk "/Routes:/ { print $field }";
+	nbroutes="$($birdc show protocols all $proto | grep 'Routes:' | \
+		sed -Ee '/'$type'/{ s/^.* ([0-9]+) '$type'.*$/\1/; p;}' -e d)"
+	if [ "$nbroutes" = "" ]; then
+		printf "0\n"
+	else
+		printf "$nbroutes\n"
+	fi
+}
+
+if [ "${0#*_}" = 'v4' ]; then
+        version='IPv4'
+        birdc='birdc'
+elif [ "${0#*_}" = 'v6' ]; then
+        version='IPv6'
+        birdc='birdc6'
+else
+	exit 1;
+fi
+
+if [ "$1" = "config" ]; then
+        echo "graph_title bird $version routes and neighbors"
+        echo 'graph_args -l 0'
+        echo 'graph_category Network'
+        echo 'graph_scale no'
+        for proto in $($birdc show protocols | awk 'NR > 2 { print $1 }'); do
+		config ${proto} imported 1;
+		config ${proto} filtered 1;
+		config ${proto} exported 1;
+		config ${proto} preferred 2;
+        done
+        exit 0
+fi
+for proto in $($birdc show protocols | awk 'NR > 2 { print $1 }'); do
+	draw ${proto} imported;
+	draw ${proto} filtered;
+	draw ${proto} exported;
+	draw ${proto} preferred;
+done
