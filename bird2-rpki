@@ -36,17 +36,27 @@ config() {
 	local type=$2
 	local line=$3
 
-	printf "${proto}_${type}.label ${proto}_${type}\n"
-	printf "${proto}_${type}.draw LINE${line}\n"
+	printf "roa4.label roa4\n"
+	printf "roa4.draw LINE${line}\n"
+	printf "roa6.label roa6\n"
+	printf "roa6.draw LINE${line}\n"
 }
 
 draw() {
 	local proto=$1
 	local type=$2
 
-	printf "${proto}_${type}.value "
-#	$birdc show protocols all $proto | awk "/Routes:/ { print $field }";
-	nbroutes="$($birdc show protocols all $proto | grep 'Routes:' | \
+	printf "roa4.value "
+	nbroutes="$(birdc show protocols all $proto | grep 'Routes:' | head -n1 | \
+		sed -Ee '/'$type'/{ s/^.* ([0-9]+) '$type'.*$/\1/; p;}' -e d)"
+	if [ "$nbroutes" = "" ]; then
+		printf "0\n"
+	else
+		printf "$nbroutes\n"
+	fi
+
+	printf "roa6.value "
+	nbroutes="$(birdc show protocols all $proto | grep 'Routes:' | tail -n1 |  \
 		sed -Ee '/'$type'/{ s/^.* ([0-9]+) '$type'.*$/\1/; p;}' -e d)"
 	if [ "$nbroutes" = "" ]; then
 		printf "0\n"
@@ -55,32 +65,16 @@ draw() {
 	fi
 }
 
-if [ "${0#*_}" = 'v4' ]; then
-        version='IPv4'
-        birdc='birdc'
-elif [ "${0#*_}" = 'v6' ]; then
-        version='IPv6'
-        birdc='birdc6'
-else
-	exit 1;
-fi
-
 if [ "$1" = "config" ]; then
-        echo "graph_title bird $version routes and neighbors"
+        echo "graph_title RPKI ROAs as seen by BIRD"
         echo 'graph_args -l 0'
         echo 'graph_category Network'
         echo 'graph_scale no'
-        for proto in $($birdc show protocols | awk 'NR > 2 { print $1 }'); do
+        for proto in $(birdc show protocols | awk '$2 == "RPKI" { print $1 }'); do
 		config ${proto} imported 1;
-		config ${proto} filtered 1;
-		config ${proto} exported 1;
-		config ${proto} preferred 2;
         done
         exit 0
 fi
-for proto in $($birdc show protocols | awk 'NR > 2 { print $1 }'); do
+for proto in $(birdc show protocols | awk '$2 == "RPKI" { print $1 }'); do
 	draw ${proto} imported;
-	draw ${proto} filtered;
-	draw ${proto} exported;
-	draw ${proto} preferred;
 done
